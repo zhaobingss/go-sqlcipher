@@ -1044,6 +1044,7 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	vfsName := ""
 
 	// SQLCipher PRAGMA's
+	pragmaMap := map[string]string{}
 	pragmaKey := ""
 	pragmaCipherPageSize := -1
 
@@ -1052,6 +1053,12 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		params, err := url.ParseQuery(dsn[pos+1:])
 		if err != nil {
 			return nil, err
+		}
+
+		for key, strArr := range params {
+			if strings.Contains(key, "_pragma_") {
+				pragmaMap[key[8:]] = strArr[0]
+			}
 		}
 
 		// Authentication
@@ -1448,6 +1455,16 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 		if err := exec(query); err != nil {
 			C.sqlite3_close_v2(db)
 			return nil, err
+		}
+	}
+
+	for key, val := range pragmaMap {
+		if val != "" && key != "key" && key != "cipher_page_size" {
+			query := fmt.Sprintf("PRAGMA %s = %s;", key, val)
+			if err := exec(query); err != nil {
+				C.sqlite3_close_v2(db)
+				return nil, err
+			}
 		}
 	}
 
